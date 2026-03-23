@@ -1,0 +1,7 @@
+---
+alwaysApply: true
+---
+
+# Language
+- **Source code**: All comments, docstrings, string literals intended for developers (e.g. error messages in code, TODO/FIXME), and identifiers where you add new names MUST be in **English**.
+- **Communication**: Reply to the user in **Japanese** by default (unless they explicitly ask for another language).
