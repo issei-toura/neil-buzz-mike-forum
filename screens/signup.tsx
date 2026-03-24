@@ -1,12 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Ionicons } from '@expo/vector-icons';
 import { useMutation } from '@tanstack/react-query';
-import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { useForm, type Control, type FieldErrors } from 'react-hook-form';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -20,15 +18,14 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { AuthTopBar, authScreenPadding } from '@/components/auth-top-bar';
 import { AppButton } from '@/components/button';
-import { Input } from '@/components/input';
+import { SignUpAddressStep } from '@/components/sign-up-steps/sign-up-address-step';
+import { SignUpDetailsStep } from '@/components/sign-up-steps/sign-up-details-step';
+import { SignUpProfileStep } from '@/components/sign-up-steps/sign-up-profile-step';
+import { SignUpSecurityStep } from '@/components/sign-up-steps/sign-up-security-step';
 import { ForumColors, ForumLayout } from '@/constants/forum';
+import { SIGNUP_STEP_META, SIGN_UP_STEPS, type SignUpStep } from '@/constants/signup-wizard';
+import { signUpSchema, signUpStepFields, type SignUpFormValues } from '@/schemas/auth-forms';
 import { login, register } from '@/services/auth';
-import {
-  SIGNUP_TOTAL_STEPS,
-  signUpSchema,
-  signUpStepFields,
-  type SignUpFormValues,
-} from '@/schemas/auth-forms';
 import type { UserCreateDto } from '@/types/auth';
 import { setAccessToken } from '@/utils/auth-storage';
 import { getErrorMessage } from '@/utils/error-message';
@@ -52,37 +49,41 @@ function toUserCreateDto(values: SignUpFormValues): UserCreateDto {
   };
 }
 
-const SIGNUP_STEP_COPY: { title: string; subtitle: string }[] = [
-  {
-    title: 'Create your Account',
-    subtitle: 'Enter your details below to start creating your brand new account.',
-  },
-  {
-    title: 'Where are you Located?',
-    subtitle: 'Add your mailing address as it will be stored on your account.',
-  },
-  {
-    title: "Let's Secure your Account",
-    subtitle: "Let's keep your NBM account safe with a secure password.",
-  },
-  {
-    title: 'Upload a Profile Picture',
-    subtitle:
-      "Let's put a name to a face. Upload a profile picture to complete your profile. This is an optional step.",
-  },
-];
+const lastSignupStep = SIGN_UP_STEPS[SIGN_UP_STEPS.length - 1];
 
-const CRITERIA_MUTED = '#656565';
-const CRITERIA_BG = '#E9E9E9';
-const TERMS_MUTED = 'rgba(56, 57, 57, 0.4)';
-
-const lastWizardStep = SIGNUP_TOTAL_STEPS - 1;
+function SignUpWizardStepContent({
+  step,
+  control,
+  errors,
+  profileUri,
+  onPickImage,
+}: {
+  step: SignUpStep;
+  control: Control<SignUpFormValues>;
+  errors: FieldErrors<SignUpFormValues>;
+  profileUri: string | null;
+  onPickImage: () => void;
+}) {
+  switch (step) {
+    case 'DETAILS':
+      return <SignUpDetailsStep control={control} errors={errors} />;
+    case 'ADDRESS':
+      return <SignUpAddressStep control={control} errors={errors} />;
+    case 'SECURITY':
+      return <SignUpSecurityStep control={control} errors={errors} />;
+    case 'PROFILE':
+      return <SignUpProfileStep profileUri={profileUri} onPickImage={onPickImage} />;
+    default:
+      return null;
+  }
+}
 
 export default function SignUpScreen() {
   const insets = useSafeAreaInsets();
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState<SignUpStep>('DETAILS');
   const [profileUri, setProfileUri] = useState<string | null>(null);
-  const meta = SIGNUP_STEP_COPY[step] ?? SIGNUP_STEP_COPY[0];
+  const meta = SIGNUP_STEP_META[step];
+  const stepIndex = SIGN_UP_STEPS.indexOf(step);
 
   const {
     control,
@@ -134,15 +135,20 @@ export default function SignUpScreen() {
   }, []);
 
   const goNext = async () => {
-    const fields = signUpStepFields[step];
+    const fields = signUpStepFields[stepIndex];
     if (!fields) return;
     const ok = await trigger(fields, { shouldFocus: true });
-    if (ok && step < lastWizardStep) setStep((s) => s + 1);
+    if (ok && stepIndex < SIGN_UP_STEPS.length - 1) {
+      setStep(SIGN_UP_STEPS[stepIndex + 1]);
+    }
   };
 
   const goBackStep = () => {
-    if (step > 0) setStep((s) => s - 1);
-    else router.back();
+    if (stepIndex > 0) {
+      setStep(SIGN_UP_STEPS[stepIndex - 1]);
+    } else {
+      router.back();
+    }
   };
 
   const onSubmit = (values: SignUpFormValues) => {
@@ -150,7 +156,7 @@ export default function SignUpScreen() {
     registerMutation.mutate(values);
   };
 
-  const showNavRow = step < lastWizardStep;
+  const showNavRow = step !== lastSignupStep;
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
@@ -166,12 +172,12 @@ export default function SignUpScreen() {
             <AuthTopBar onBack={goBackStep} />
 
             <View style={styles.progressRow}>
-              {Array.from({ length: SIGNUP_TOTAL_STEPS }).map((_, index) => (
+              {SIGN_UP_STEPS.map((stepId, index) => (
                 <View
-                  key={index}
+                  key={stepId}
                   style={[
                     styles.progressSeg,
-                    index <= step ? styles.progressSegActive : styles.progressSegIdle,
+                    index <= stepIndex ? styles.progressSegActive : styles.progressSegIdle,
                   ]}
                 />
               ))}
@@ -182,288 +188,13 @@ export default function SignUpScreen() {
               <Text style={styles.subtitle}>{meta.subtitle}</Text>
             </View>
 
-            {step === 0 ? (
-              <>
-                <View style={styles.nameBlock}>
-                  <Text style={styles.groupLabel}>Your name</Text>
-                  <Controller
-                    control={control}
-                    name="firstName"
-                    render={({ field: { onChange, onBlur, value, ref } }) => (
-                      <Input
-                        ref={ref}
-                        label=""
-                        placeholder="Enter your first name here"
-                        value={value}
-                        onChangeText={onChange}
-                        onBlur={onBlur}
-                        error={errors.firstName?.message}
-                        autoComplete="given-name"
-                      />
-                    )}
-                  />
-                  <Controller
-                    control={control}
-                    name="lastName"
-                    render={({ field: { onChange, onBlur, value, ref } }) => (
-                      <Input
-                        ref={ref}
-                        label=""
-                        placeholder="Enter your last name here"
-                        value={value}
-                        onChangeText={onChange}
-                        onBlur={onBlur}
-                        error={errors.lastName?.message}
-                        autoComplete="family-name"
-                      />
-                    )}
-                  />
-                </View>
-                <Controller
-                  control={control}
-                  name="email"
-                  render={({ field: { onChange, onBlur, value, ref } }) => (
-                    <Input
-                      ref={ref}
-                      label="Email"
-                      placeholder="you@email.com.au"
-                      value={value}
-                      onChangeText={onChange}
-                      onBlur={onBlur}
-                      error={errors.email?.message}
-                      keyboardType="email-address"
-                      autoComplete="email"
-                      autoCapitalize="none"
-                    />
-                  )}
-                />
-              </>
-            ) : null}
-
-            {step === 1 ? (
-              <>
-                <Controller
-                  control={control}
-                  name="street"
-                  render={({ field: { onChange, onBlur, value, ref } }) => (
-                    <Input
-                      ref={ref}
-                      label="Enter your address"
-                      placeholder="Start typing..."
-                      value={value}
-                      onChangeText={onChange}
-                      onBlur={onBlur}
-                      error={errors.street?.message}
-                    />
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="number"
-                  render={({ field: { onChange, onBlur, value, ref } }) => (
-                    <Input
-                      ref={ref}
-                      label="Street number"
-                      placeholder="Number"
-                      value={value}
-                      onChangeText={onChange}
-                      onBlur={onBlur}
-                      error={errors.number?.message}
-                    />
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="city"
-                  render={({ field: { onChange, onBlur, value, ref } }) => (
-                    <Input
-                      ref={ref}
-                      label="City"
-                      placeholder="City"
-                      value={value}
-                      onChangeText={onChange}
-                      onBlur={onBlur}
-                      error={errors.city?.message}
-                    />
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="state"
-                  render={({ field: { onChange, onBlur, value, ref } }) => (
-                    <Input
-                      ref={ref}
-                      label="State"
-                      placeholder="State"
-                      value={value}
-                      onChangeText={onChange}
-                      onBlur={onBlur}
-                      error={errors.state?.message}
-                    />
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="postalCode"
-                  render={({ field: { onChange, onBlur, value, ref } }) => (
-                    <Input
-                      ref={ref}
-                      label="Postal code"
-                      placeholder="Postal code"
-                      value={value}
-                      onChangeText={onChange}
-                      onBlur={onBlur}
-                      error={errors.postalCode?.message}
-                    />
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="country"
-                  render={({ field: { onChange, onBlur, value, ref } }) => (
-                    <Input
-                      ref={ref}
-                      label="Country"
-                      placeholder="Country"
-                      value={value}
-                      onChangeText={onChange}
-                      onBlur={onBlur}
-                      error={errors.country?.message}
-                      autoComplete="country"
-                    />
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="telephone"
-                  render={({ field: { onChange, onBlur, value, ref } }) => (
-                    <Input
-                      ref={ref}
-                      label="Phone"
-                      placeholder="Phone number"
-                      value={value}
-                      onChangeText={onChange}
-                      onBlur={onBlur}
-                      error={errors.telephone?.message}
-                      keyboardType="phone-pad"
-                      autoComplete="tel"
-                    />
-                  )}
-                />
-              </>
-            ) : null}
-
-            {step === 2 ? (
-              <>
-                <Controller
-                  control={control}
-                  name="password"
-                  render={({ field: { onChange, onBlur, value, ref } }) => (
-                    <Input
-                      ref={ref}
-                      label="Create a Password"
-                      placeholder="Enter your password"
-                      value={value}
-                      onChangeText={onChange}
-                      onBlur={onBlur}
-                      error={errors.password?.message}
-                      secureTextEntry
-                      autoComplete="new-password"
-                      textContentType="newPassword"
-                    />
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="confirmPassword"
-                  render={({ field: { onChange, onBlur, value, ref } }) => (
-                    <Input
-                      ref={ref}
-                      label="Confirm Password"
-                      placeholder="Re-enter your password"
-                      value={value}
-                      onChangeText={onChange}
-                      onBlur={onBlur}
-                      error={errors.confirmPassword?.message}
-                      secureTextEntry
-                      autoComplete="new-password"
-                      textContentType="newPassword"
-                    />
-                  )}
-                />
-                <View style={styles.criteriaBox}>
-                  <Text style={styles.criteriaTitle}>Your password must...</Text>
-                  <View style={styles.criteriaRow}>
-                    <Text style={styles.criteriaIcon}>0</Text>
-                    <Text style={styles.criteriaLine}>Include at least one number (eg. 1)</Text>
-                  </View>
-                  <View style={styles.criteriaRow}>
-                    <Text style={styles.criteriaIcon}>#</Text>
-                    <Text style={styles.criteriaLine}>Include at least one symbol (eg. #)</Text>
-                  </View>
-                  <View style={styles.criteriaRow}>
-                    <Text style={styles.criteriaIcon}>Tt</Text>
-                    <Text style={[styles.criteriaLine, styles.criteriaLineFlex]}>
-                      Include at least one upper and lowercase character
-                    </Text>
-                  </View>
-                </View>
-                <Controller
-                  control={control}
-                  name="acceptedTerms"
-                  render={({ field: { value, onChange } }) => (
-                    <Pressable
-                      style={styles.termsRow}
-                      onPress={() => onChange(!value)}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: value }}>
-                      <View style={[styles.checkbox, value && styles.checkboxOn]}>
-                        {value ? (
-                          <Ionicons name="checkmark" size={14} color={ForumColors.white} />
-                        ) : null}
-                      </View>
-                      <Text style={[styles.termsText, value && styles.termsTextChecked]}>
-                        By ticking this box, I agree to the terms and conditions of NBM.
-                      </Text>
-                    </Pressable>
-                  )}
-                />
-                {errors.acceptedTerms ? (
-                  <Text style={styles.termsError}>{errors.acceptedTerms.message}</Text>
-                ) : null}
-              </>
-            ) : null}
-
-            {step === 3 ? (
-              <>
-                {!profileUri ? (
-                  <Pressable
-                    style={styles.uploadZone}
-                    onPress={pickProfileImage}
-                    accessibilityRole="button"
-                    accessibilityLabel="Select profile picture">
-                    <Ionicons name="cloud-upload-outline" size={24} color={ForumColors.charcoal} />
-                    <View style={styles.uploadCopy}>
-                      <Text style={styles.uploadTitle}>Select a file</Text>
-                      <Text style={styles.uploadHint}>JPG or PNG, file size no more than 10MB</Text>
-                    </View>
-                  </Pressable>
-                ) : (
-                  <View style={styles.profilePreview}>
-                    <Image
-                      source={{ uri: profileUri }}
-                      style={styles.profileImage}
-                      contentFit="cover"
-                    />
-                    <View style={styles.editLinkColumn}>
-                      <Pressable onPress={pickProfileImage} accessibilityRole="button">
-                        <Text style={styles.editPictureLink}>Edit profile picture</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                )}
-              </>
-            ) : null}
+            <SignUpWizardStepContent
+              step={step}
+              control={control}
+              errors={errors}
+              profileUri={profileUri}
+              onPickImage={pickProfileImage}
+            />
 
             {registerMutation.isError ? (
               <Text style={styles.mutationError}>{getErrorMessage(registerMutation.error)}</Text>
@@ -480,7 +211,7 @@ export default function SignUpScreen() {
               </View>
             ) : null}
 
-            {step === 3 ? (
+            {step === 'PROFILE' ? (
               <View style={styles.profileActions}>
                 <AppButton
                   title="Create my Account"
@@ -564,135 +295,6 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: ForumColors.charcoal,
     lineHeight: 22,
-  },
-  nameBlock: {
-    marginBottom: 8,
-    gap: 8,
-  },
-  groupLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: ForumColors.charcoal,
-  },
-  criteriaBox: {
-    backgroundColor: CRITERIA_BG,
-    borderRadius: 8,
-    padding: 14,
-    gap: 8,
-    marginBottom: 8,
-  },
-  criteriaTitle: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: CRITERIA_MUTED,
-  },
-  criteriaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  criteriaIcon: {
-    width: 24,
-    textAlign: 'center',
-    fontSize: 14,
-    fontWeight: '600',
-    color: ForumColors.purple,
-  },
-  criteriaLine: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: CRITERIA_MUTED,
-  },
-  criteriaLineFlex: {
-    flex: 1,
-  },
-  termsRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: 'rgba(56, 57, 57, 0.2)',
-    marginTop: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxOn: {
-    backgroundColor: ForumColors.purple,
-    borderColor: ForumColors.purple,
-  },
-  termsText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '400',
-    color: TERMS_MUTED,
-    lineHeight: 20,
-  },
-  termsTextChecked: {
-    color: ForumColors.charcoal,
-  },
-  termsError: {
-    color: ForumColors.error,
-    fontSize: 12,
-    marginBottom: 8,
-  },
-  uploadZone: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 24,
-    minHeight: 106,
-    paddingVertical: 32,
-    paddingHorizontal: 32,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: ForumColors.charcoal,
-    marginBottom: 8,
-  },
-  uploadCopy: {
-    flex: 1,
-    gap: 4,
-    opacity: 0.7,
-  },
-  uploadTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: ForumColors.charcoal,
-  },
-  uploadHint: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: ForumColors.charcoal,
-  },
-  profilePreview: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 8,
-    marginBottom: 16,
-  },
-  profileImage: {
-    width: 183,
-    height: 183,
-    borderRadius: 999,
-    backgroundColor: CRITERIA_BG,
-  },
-  editLinkColumn: {
-    flex: 1,
-    minHeight: 183,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  editPictureLink: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: ForumColors.purple,
-    textDecorationLine: 'underline',
-    textAlign: 'center',
   },
   profileActions: {
     gap: 16,
