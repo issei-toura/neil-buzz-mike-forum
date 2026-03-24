@@ -5,7 +5,8 @@
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
+/** Aligns with NBM Forum Figma primary purple */
+const tintColorLight = '#6537FF';
 const tintColorDark = '#fff';
 
 export const Colors = {
