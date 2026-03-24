@@ -3,6 +3,8 @@
  * Override the base URL with EXPO_PUBLIC_API_BASE_URL (no trailing slash required).
  */
 
+import { getAccessToken } from '@/utils/auth-storage';
+
 const DEFAULT_API_BASE_URL = 'https://api.development.forum.mike-automations.link';
 
 function trimTrailingSlashes(value: string): string {
@@ -48,4 +50,17 @@ export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   }
 
   return fetch(url, { ...init, headers });
+}
+
+/**
+ * Same as apiFetch but adds `Authorization: Bearer <token>` when a token exists in secure storage.
+ * Use for endpoints that require JWT (OpenAPI security: Authorization).
+ */
+export async function apiFetchWithAuth(path: string, init?: RequestInit): Promise<Response> {
+  const token = await getAccessToken();
+  const headers = new Headers(init?.headers);
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  return apiFetch(path, { ...init, headers });
 }

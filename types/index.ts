@@ -1,4 +1,10 @@
 /**
- * Shared application and API types. Add auth.ts, post.ts, etc. as needed.
+ * Shared application and API types. Add post.ts, etc. as needed.
  */
-export {};
+export type {
+  CreateAddressDto,
+  LoginDto,
+  LoginSucceededDto,
+  UserCreateDto,
+  UserReadDto,
+} from './auth';
