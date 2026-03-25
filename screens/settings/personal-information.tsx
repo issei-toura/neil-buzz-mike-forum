@@ -1,0 +1,296 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { Input } from '@/components/input';
+import { ForumColors, ForumLayout } from '@/constants/forum';
+import type { UserReadDto } from '@/types/auth';
+import { getCurrentUser, getProfileAvatarUri, setCurrentUser, setProfileAvatarUri } from '@/utils/auth-storage';
+
+const AVATAR_SIZE = 140;
+
+function isValidEmail(value: string): boolean {
+  const t = value.trim();
+  if (t.length === 0) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
+}
+
+export default function PersonalInformationScreen() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [baseUser, setBaseUser] = useState<UserReadDto | null>(null);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [user, uri] = await Promise.all([getCurrentUser(), getProfileAvatarUri()]);
+        if (cancelled) return;
+        setBaseUser(user);
+        if (user) {
+          setFirstName(user.firstName ?? '');
+          setLastName(user.lastName ?? '');
+          setEmail(user.email ?? '');
+        }
+        setAvatarUri(uri);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const pickAvatar = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow photo library access to set a profile picture.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+    if (!result.canceled && result.assets[0]?.uri) {
+      setAvatarUri(result.assets[0].uri);
+    }
+  }, []);
+
+  const onSave = useCallback(async () => {
+    const fn = firstName.trim();
+    const ln = lastName.trim();
+    const em = email.trim();
+    if (!fn || !ln) {
+      Alert.alert('Missing name', 'Please enter your first and last name.');
+      return;
+    }
+    if (!isValidEmail(em)) {
+      Alert.alert('Invalid email', 'Please enter a valid email address.');
+      return;
+    }
+    if (!baseUser) {
+      Alert.alert('Not signed in', 'Sign in again to save your profile.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated: UserReadDto = {
+        ...baseUser,
+        firstName: fn,
+        lastName: ln,
+        email: em,
+      };
+      await setCurrentUser(updated);
+      await setProfileAvatarUri(avatarUri);
+      setBaseUser(updated);
+      router.back();
+    } finally {
+      setSaving(false);
+    }
+  }, [avatarUri, baseUser, email, firstName, lastName, router]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+        <View style={styles.loading}>
+          <ActivityIndicator size="large" color={ForumColors.purple} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <View style={styles.topBar}>
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.iconHit}
+          accessibilityRole="button"
+          accessibilityLabel="Close">
+          <MaterialIcons name="close" size={24} color={ForumColors.charcoal} />
+        </Pressable>
+        <Pressable
+          onPress={onSave}
+          disabled={saving}
+          style={({ pressed }) => [styles.saveBtn, pressed && styles.saveBtnPressed, saving && styles.saveBtnDisabled]}
+          accessibilityRole="button"
+          accessibilityLabel="Save profile">
+          {saving ? (
+            <ActivityIndicator size="small" color={ForumColors.white} />
+          ) : (
+            <>
+              <Text style={styles.saveLabel}>Save</Text>
+              <MaterialIcons name="check" size={18} color={ForumColors.white} />
+            </>
+          )}
+        </Pressable>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}>
+        <Text style={styles.screenTitle} accessibilityRole="header">
+          Personal Information
+        </Text>
+
+        <View style={styles.profileRow}>
+          {avatarUri ? (
+            <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
+          ) : (
+            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+              <MaterialIcons name="person" size={56} color={ForumColors.muted} />
+            </View>
+          )}
+          <Pressable onPress={pickAvatar} style={styles.editPhotoWrap} accessibilityRole="button">
+            <Text style={styles.editPhotoText}>Edit profile picture</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.nameBlock}>
+          <Text style={styles.groupLabel}>Your name</Text>
+          <Input
+            label=""
+            placeholder="Enter your first name here"
+            value={firstName}
+            onChangeText={setFirstName}
+            brandBorder
+            autoCapitalize="words"
+            autoCorrect
+          />
+          <Input
+            label=""
+            placeholder="Last name"
+            value={lastName}
+            onChangeText={setLastName}
+            brandBorder
+            autoCapitalize="words"
+            autoCorrect
+          />
+        </View>
+
+        <Input
+          label="Email"
+          placeholder="you@email.com.au"
+          value={email}
+          onChangeText={setEmail}
+          brandBorder
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+        />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: ForumColors.white,
+  },
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: ForumLayout.screenPadding,
+    paddingBottom: 8,
+  },
+  iconHit: {
+    padding: 4,
+    marginLeft: -4,
+  },
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: ForumColors.purple,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  saveBtnPressed: {
+    opacity: 0.88,
+  },
+  saveBtnDisabled: {
+    opacity: 0.7,
+  },
+  saveLabel: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: ForumColors.white,
+  },
+  scroll: {
+    paddingHorizontal: ForumLayout.screenPadding,
+    paddingBottom: 40,
+    maxWidth: ForumLayout.maxContentWidth + 48,
+    alignSelf: 'center',
+    width: '100%',
+  },
+  screenTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: ForumColors.charcoal,
+    marginBottom: 32,
+  },
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 32,
+  },
+  avatar: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+  },
+  avatarPlaceholder: {
+    backgroundColor: ForumColors.settingsRow,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editPhotoWrap: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  editPhotoText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: ForumColors.purple,
+    textDecorationLine: 'underline',
+    textAlign: 'center',
+  },
+  nameBlock: {
+    marginBottom: 8,
+  },
+  groupLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: ForumColors.charcoal,
+    marginBottom: 8,
+  },
+});

@@ -21,6 +21,10 @@ export type InputProps = Omit<TextInputProps, 'value' | 'onChangeText' | 'secure
   error?: string;
   /** When true, input is obscured and an eye toggle is shown. */
   secureTextEntry?: boolean;
+  /** When true, border uses brand purple (e.g. settings profile fields). */
+  brandBorder?: boolean;
+  /** Multiline text (e.g. address). */
+  multiline?: boolean;
 };
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
@@ -32,6 +36,8 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
     onBlur,
     error,
     secureTextEntry = false,
+    brandBorder = false,
+    multiline = false,
     editable = true,
     ...textInputProps
   },
@@ -39,15 +45,19 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
 ) {
   const [showSecret, setShowSecret] = useState(false);
   const isPassword = secureTextEntry;
-  const borderColor = error ? ForumColors.error : ForumColors.border;
+  const borderColor = error
+    ? ForumColors.error
+    : brandBorder
+      ? ForumColors.purple
+      : ForumColors.border;
 
   return (
     <View style={styles.wrapper}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
-      <View style={[styles.fieldShell, { borderColor }]}>
+      <View style={[styles.fieldShell, { borderColor }, multiline && styles.fieldShellMultiline]}>
         <TextInput
           ref={ref}
-          style={styles.input}
+          style={[styles.input, multiline && styles.inputMultiline]}
           placeholder={placeholder}
           placeholderTextColor={ForumColors.muted}
           value={value}
@@ -57,6 +67,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
           secureTextEntry={isPassword && !showSecret}
           autoCapitalize={textInputProps.autoCapitalize ?? (isPassword ? 'none' : undefined)}
           {...textInputProps}
+          multiline={multiline}
         />
         {isPassword ? (
           <Pressable
@@ -99,12 +110,22 @@ const styles = StyleSheet.create({
     paddingVertical: ForumLayout.inputPaddingVertical,
     minHeight: 52,
   },
+  fieldShellMultiline: {
+    alignItems: 'flex-start',
+    minHeight: 100,
+    paddingVertical: 12,
+  },
   input: {
     flex: 1,
     fontSize: 16,
     fontWeight: '400',
     color: ForumColors.charcoal,
     paddingVertical: 0,
+  },
+  inputMultiline: {
+    minHeight: 72,
+    paddingTop: 2,
+    textAlignVertical: 'top',
   },
   toggle: {
     padding: 4,
