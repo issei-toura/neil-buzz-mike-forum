@@ -1,9 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import {
   useForm,
   type Control,
@@ -76,7 +75,7 @@ function SignUpWizardStepContent({
   getValues,
   clearErrors,
   profileUri,
-  onPickImage,
+  onProfileUriChange,
 }: {
   step: SignUpStep;
   control: Control<SignUpFormValues>;
@@ -85,7 +84,7 @@ function SignUpWizardStepContent({
   getValues: UseFormGetValues<SignUpFormValues>;
   clearErrors: UseFormClearErrors<SignUpFormValues>;
   profileUri: string | null;
-  onPickImage: () => void;
+  onProfileUriChange: (uri: string) => void;
 }) {
   switch (step) {
     case 'DETAILS':
@@ -102,7 +101,7 @@ function SignUpWizardStepContent({
     case 'SECURITY':
       return <SignUpSecurityStep control={control} errors={errors} />;
     case 'PROFILE':
-      return <SignUpProfileStep profileUri={profileUri} onPickImage={onPickImage} />;
+      return <SignUpProfileStep profileUri={profileUri} onProfileUriChange={onProfileUriChange} />;
     default:
       return null;
   }
@@ -158,20 +157,6 @@ export default function SignUpScreen() {
       router.replace('/(app)');
     },
   });
-
-  const pickProfileImage = useCallback(async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.85,
-    });
-    if (!result.canceled && result.assets[0]?.uri) {
-      setProfileUri(result.assets[0].uri);
-    }
-  }, []);
 
   const goNext = async () => {
     const fields = signUpStepFields[stepIndex];
@@ -246,7 +231,7 @@ export default function SignUpScreen() {
               getValues={getValues}
               clearErrors={clearErrors}
               profileUri={profileUri}
-              onPickImage={pickProfileImage}
+              onProfileUriChange={setProfileUri}
             />
 
             {registerMutation.isError ? (

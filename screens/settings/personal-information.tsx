@@ -1,6 +1,4 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -15,11 +13,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Input } from '@/components/input';
+import { ProfileAvatarPicker } from '@/components/profile-avatar-picker';
 import { ForumColors, ForumLayout } from '@/constants/forum';
 import type { UserReadDto } from '@/types/auth';
 import { getCurrentUser, getProfileAvatarUri, setCurrentUser, setProfileAvatarUri } from '@/utils/auth-storage';
-
-const AVATAR_SIZE = 140;
 
 function isValidEmail(value: string): boolean {
   const t = value.trim();
@@ -57,23 +54,6 @@ export default function PersonalInformationScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  const pickAvatar = useCallback(async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow photo library access to set a profile picture.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.85,
-    });
-    if (!result.canceled && result.assets[0]?.uri) {
-      setAvatarUri(result.assets[0].uri);
-    }
   }, []);
 
   const onSave = useCallback(async () => {
@@ -154,18 +134,7 @@ export default function PersonalInformationScreen() {
           Personal Information
         </Text>
 
-        <View style={styles.profileRow}>
-          {avatarUri ? (
-            <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
-          ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <MaterialIcons name="person" size={56} color={ForumColors.muted} />
-            </View>
-          )}
-          <Pressable onPress={pickAvatar} style={styles.editPhotoWrap} accessibilityRole="button">
-            <Text style={styles.editPhotoText}>Edit profile picture</Text>
-          </Pressable>
-        </View>
+        <ProfileAvatarPicker avatarUri={avatarUri} onAvatarUriChange={setAvatarUri} />
 
         <View style={styles.nameBlock}>
           <Text style={styles.groupLabel}>Your name</Text>
@@ -256,33 +225,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: ForumColors.charcoal,
     marginBottom: 32,
-  },
-  profileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 32,
-  },
-  avatar: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
-  },
-  avatarPlaceholder: {
-    backgroundColor: ForumColors.settingsRow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editPhotoWrap: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  editPhotoText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: ForumColors.purple,
-    textDecorationLine: 'underline',
-    textAlign: 'center',
   },
   nameBlock: {
     marginBottom: 8,
