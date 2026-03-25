@@ -21,7 +21,7 @@ import { Input } from '@/components/input';
 import { login } from '@/services/auth';
 import { signInSchema, type SignInFormValues } from '@/schemas/auth-forms';
 import { ForumColors, ForumLayout } from '@/constants/forum';
-import { setAccessToken } from '@/utils/auth-storage';
+import { setAccessToken, setCurrentUser } from '@/utils/auth-storage';
 import { ApiRequestError } from '@/utils/api-response';
 import { getErrorMessage } from '@/utils/error-message';
 
@@ -63,7 +63,8 @@ export default function SignInScreen() {
     mutationFn: login,
     onSuccess: async (data) => {
       await setAccessToken(data.accessToken);
-      router.replace('/(tabs)');
+      await setCurrentUser(data.user);
+      router.replace('/(app)');
     },
   });
 

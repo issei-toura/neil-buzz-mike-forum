@@ -27,7 +27,7 @@ import { SIGNUP_STEP_META, SIGN_UP_STEPS, type SignUpStep } from '@/constants/si
 import { signUpSchema, signUpStepFields, type SignUpFormValues } from '@/schemas/auth-forms';
 import { login, register } from '@/services/auth';
 import type { UserCreateDto } from '@/types/auth';
-import { setAccessToken } from '@/utils/auth-storage';
+import { setAccessToken, setCurrentUser } from '@/utils/auth-storage';
 import { getErrorMessage } from '@/utils/error-message';
 
 function toUserCreateDto(values: SignUpFormValues): UserCreateDto {
@@ -116,7 +116,8 @@ export default function SignUpScreen() {
     },
     onSuccess: async (data) => {
       await setAccessToken(data.accessToken);
-      router.replace('/(tabs)');
+      await setCurrentUser(data.user);
+      router.replace('/(app)');
     },
   });
 
