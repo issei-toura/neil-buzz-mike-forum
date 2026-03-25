@@ -11,8 +11,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Input } from '@/components/input';
+import { AddressInput } from '@/components/address-input';
 import { ForumColors, ForumLayout } from '@/constants/forum';
+import type { GoogleResolvedAddress } from '@/types/google-place';
 import { getProfileLocation, setProfileLocation } from '@/utils/auth-storage';
 
 export default function LocationScreen() {
@@ -20,13 +21,17 @@ export default function LocationScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [address, setAddress] = useState('');
+  const [resolvedPlace, setResolvedPlace] = useState<GoogleResolvedAddress | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const stored = await getProfileLocation();
-        if (!cancelled) setAddress(stored ?? '');
+        if (!cancelled) {
+          setAddress(stored ?? '');
+          setResolvedPlace(null);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -39,12 +44,13 @@ export default function LocationScreen() {
   const onSave = useCallback(async () => {
     setSaving(true);
     try {
-      await setProfileLocation(address);
+      const toSave = resolvedPlace?.fullAddress?.trim() || address.trim();
+      await setProfileLocation(toSave.length > 0 ? toSave : null);
       router.back();
     } finally {
       setSaving(false);
     }
-  }, [address, router]);
+  }, [address, resolvedPlace, router]);
 
   if (loading) {
     return (
@@ -91,13 +97,13 @@ export default function LocationScreen() {
           Location
         </Text>
 
-        <Input
+        <AddressInput
           label="Address"
-          placeholder="Street, city, state, postcode"
+          placeholder="Start typing — pick a suggestion for a verified address"
           value={address}
           onChangeText={setAddress}
+          onResolvedAddressChange={setResolvedPlace}
           brandBorder
-          multiline
         />
       </ScrollView>
     </SafeAreaView>

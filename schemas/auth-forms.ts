@@ -28,6 +28,11 @@ export const signUpSchema = z
     state: z.string().min(1, 'State is required'),
     postalCode: z.string().min(1, 'Postal code is required'),
     country: z.string().min(1, 'Country is required'),
+    /** Filled when the user selects a Google Places suggestion (optional for API). */
+    googlePlaceId: z.string().optional(),
+    fullAddressLine: z.string().optional(),
+    addressLat: z.number().optional(),
+    addressLng: z.number().optional(),
     acceptedTerms: z.boolean(),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -68,8 +73,16 @@ export type UpdatePasswordFormValues = z.infer<typeof updatePasswordSchema>;
 
 /** Field names per signup wizard step (0-based) for RHF `trigger`. Step 3 is profile-only (no fields here). */
 export const signUpStepFields: (keyof SignUpFormValues)[][] = [
-  ['firstName', 'lastName', 'email'],
-  ['street', 'number', 'city', 'state', 'postalCode', 'country', 'telephone'],
+  ['firstName', 'lastName', 'email', 'telephone'],
+  [
+    'street',
+    'number',
+    'city',
+    'state',
+    'postalCode',
+    'country',
+    'googlePlaceId',
+  ],
   ['password', 'confirmPassword', 'acceptedTerms'],
 ];
 

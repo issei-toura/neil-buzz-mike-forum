@@ -66,6 +66,23 @@ export function SignUpDetailsStep({ control, errors }: Props) {
           />
         )}
       />
+      <Controller
+        control={control}
+        name="telephone"
+        render={({ field: { onChange, onBlur, value, ref } }) => (
+          <Input
+            ref={ref}
+            label="Phone"
+            placeholder="Phone number"
+            value={value}
+            onChangeText={onChange}
+            onBlur={onBlur}
+            error={errors.telephone?.message}
+            keyboardType="phone-pad"
+            autoComplete="tel"
+          />
+        )}
+      />
     </>
   );
 }
