@@ -16,6 +16,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ForumColors, ForumLayout } from '@/constants/forum';
+import { queryKeys } from '@/lib/query-keys';
 import { createPostComment, getPostComments } from '@/services/posts';
 import type { UserReadDto } from '@/types/auth';
 import type { ReadCommentDto } from '@/types/comments';
@@ -81,9 +82,9 @@ export default function PostDetailScreen() {
   const [replyingToId, setReplyingToId] = useState<number | null>(null);
 
   const postQuery = useQuery({
-    queryKey: ['post', numericId],
+    queryKey: queryKeys.post(numericId),
     queryFn: async () => {
-      const cached = queryClient.getQueryData<ReadPostDto>(['post', numericId]);
+      const cached = queryClient.getQueryData<ReadPostDto>(queryKeys.post(numericId));
       if (!cached) {
         throw new Error('Open this post from the forum feed.');
       }
@@ -95,7 +96,7 @@ export default function PostDetailScreen() {
   });
 
   const commentsQuery = useInfiniteQuery({
-    queryKey: ['postComments', numericId],
+    queryKey: queryKeys.postComments(numericId),
     queryFn: ({ pageParam }) => getPostComments(numericId, pageParam, COMMENT_PAGE_SIZE),
     enabled: validId,
     initialPageParam: 1,
@@ -121,11 +122,11 @@ export default function PostDetailScreen() {
     onSuccess: () => {
       setDraft('');
       setReplyingToId(null);
-      queryClient.invalidateQueries({ queryKey: ['postComments', numericId] });
-      queryClient.setQueryData<ReadPostDto>(['post', numericId], (prev) =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.postComments(numericId) });
+      queryClient.setQueryData<ReadPostDto>(queryKeys.post(numericId), (prev) =>
         prev ? { ...prev, comments: prev.comments + 1 } : prev
       );
-      queryClient.invalidateQueries({ queryKey: ['forumPosts'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.forumPosts.all });
     },
   });
 

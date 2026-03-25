@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ForumColors, ForumLayout } from '@/constants/forum';
+import { queryKeys } from '@/lib/query-keys';
 import { likePost, searchPosts, unlikePost } from '@/services/posts';
 import { listTags } from '@/services/tags';
 import type { UserReadDto } from '@/types/auth';
@@ -54,7 +55,7 @@ function patchPostInForumCaches(
   patch: (post: ReadPostDto) => ReadPostDto
 ) {
   queryClient.setQueriesData<InfiniteData<PaginationPostDto>>(
-    { queryKey: ['forumPosts'] },
+    { queryKey: queryKeys.forumPosts.all },
     (old) => {
       if (!old?.pages) return old;
       return {
@@ -73,7 +74,7 @@ function adjustPostLikesEverywhere(queryClient: QueryClient, postId: number, del
     ...p,
     likes: Math.max(0, p.likes + delta),
   }));
-  queryClient.setQueryData<ReadPostDto>(['post', postId], (prev) => {
+  queryClient.setQueryData<ReadPostDto>(queryKeys.post(postId), (prev) => {
     if (!prev || prev.id !== postId) return prev;
     return { ...prev, likes: Math.max(0, prev.likes + delta) };
   });
@@ -94,13 +95,13 @@ export default function ForumFeedScreen() {
   }, [search]);
 
   const tagsQuery = useQuery({
-    queryKey: ['tags', 'forumFeed'],
+    queryKey: queryKeys.tags.forumFeed,
     queryFn: () => listTags(1, 100),
     select: (res) => res.data.map((x) => x.name).filter((n) => n.trim().length > 0),
   });
 
   const postsQuery = useInfiniteQuery({
-    queryKey: ['forumPosts', selectedTag ?? 'all'],
+    queryKey: queryKeys.forumPosts.feed(selectedTag),
     queryFn: ({ pageParam }) =>
       searchPosts({
         page: pageParam,
@@ -146,9 +147,9 @@ export default function ForumFeedScreen() {
       else await unlikePost(postId);
     },
     onMutate: async ({ postId, like }) => {
-      await queryClient.cancelQueries({ queryKey: ['forumPosts'] });
-      const snapshots = queryClient.getQueriesData({ queryKey: ['forumPosts'] });
-      const detailSnap = queryClient.getQueryData<ReadPostDto>(['post', postId]);
+      await queryClient.cancelQueries({ queryKey: queryKeys.forumPosts.all });
+      const snapshots = queryClient.getQueriesData({ queryKey: queryKeys.forumPosts.all });
+      const detailSnap = queryClient.getQueryData<ReadPostDto>(queryKeys.post(postId));
       const prevLiked = likedByMe[postId] ?? false;
       const delta = like ? 1 : -1;
       adjustPostLikesEverywhere(queryClient, postId, delta);
@@ -160,7 +161,7 @@ export default function ForumFeedScreen() {
         queryClient.setQueryData(key, data);
       });
       if (ctx && ctx.detailSnap !== undefined) {
-        queryClient.setQueryData(['post', postId], ctx.detailSnap);
+        queryClient.setQueryData(queryKeys.post(postId), ctx.detailSnap);
       }
       if (ctx) {
         setLikedByMe((s) => ({ ...s, [postId]: ctx.prevLiked }));
@@ -244,7 +245,7 @@ export default function ForumFeedScreen() {
           toggleLikeMutation.mutate({ postId: item.id, like: next });
         }}
         onOpenPost={() => {
-          queryClient.setQueryData(['post', item.id], item);
+          queryClient.setQueryData(queryKeys.post(item.id), item);
           router.push({ pathname: '/post/[postId]', params: { postId: String(item.id) } });
         }}
       />

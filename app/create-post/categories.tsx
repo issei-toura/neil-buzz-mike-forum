@@ -11,6 +11,7 @@ import {
   createPostTitleFont,
 } from '@/constants/create-post-styles';
 import { ForumColors, ForumLayout } from '@/constants/forum';
+import { queryKeys } from '@/lib/query-keys';
 import { listTags } from '@/services/tags';
 import { getErrorMessage } from '@/utils/error-message';
 
@@ -25,7 +26,7 @@ export default function CreatePostCategoriesScreen() {
   const { draft, toggleTag } = useCreatePostDraft();
 
   const tagsQuery = useQuery({
-    queryKey: ['tags', 'createPost'],
+    queryKey: queryKeys.tags.createPost,
     queryFn: () => listTags(1, TAGS_LIMIT),
     select: (res) => res.data.map((x) => x.name).filter((n) => n.trim().length > 0),
   });

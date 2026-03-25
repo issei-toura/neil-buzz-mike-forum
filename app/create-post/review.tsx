@@ -11,6 +11,7 @@ import {
   createPostTitleFont,
 } from '@/constants/create-post-styles';
 import { ForumColors, ForumLayout } from '@/constants/forum';
+import { queryKeys } from '@/lib/query-keys';
 import { createPost } from '@/services/posts';
 import { getErrorMessage } from '@/utils/error-message';
 
@@ -30,8 +31,8 @@ export default function CreatePostReviewScreen() {
         tags: draft.selectedTags,
       }),
     onSuccess: (post) => {
-      queryClient.setQueryData(['post', post.id], post);
-      queryClient.invalidateQueries({ queryKey: ['forumPosts'] });
+      queryClient.setQueryData(queryKeys.post(post.id), post);
+      queryClient.invalidateQueries({ queryKey: queryKeys.forumPosts.all });
       resetDraft();
       router.replace('/(app)');
     },
