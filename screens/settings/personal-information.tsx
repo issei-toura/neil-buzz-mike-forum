@@ -1,6 +1,8 @@
+import { zodResolver } from '@hookform/resolvers/zod';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import {
   ActivityIndicator,
   Alert,
@@ -15,24 +17,33 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Input } from '@/components/input';
 import { ProfileAvatarPicker } from '@/components/profile-avatar-picker';
 import { ForumColors, ForumLayout } from '@/constants/forum';
+import {
+  personalInformationSchema,
+  type PersonalInformationFormValues,
+} from '@/schemas/auth-forms';
 import type { UserReadDto } from '@/types/auth';
 import { getCurrentUser, getProfileAvatarUri, setCurrentUser, setProfileAvatarUri } from '@/utils/auth-storage';
-
-function isValidEmail(value: string): boolean {
-  const t = value.trim();
-  if (t.length === 0) return false;
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
-}
 
 export default function PersonalInformationScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [baseUser, setBaseUser] = useState<UserReadDto | null>(null);
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<PersonalInformationFormValues>({
+    resolver: zodResolver(personalInformationSchema),
+    defaultValues: {
+      firstName: '',
+      lastName: '',
+      email: '',
+    },
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -42,9 +53,11 @@ export default function PersonalInformationScreen() {
         if (cancelled) return;
         setBaseUser(user);
         if (user) {
-          setFirstName(user.firstName ?? '');
-          setLastName(user.lastName ?? '');
-          setEmail(user.email ?? '');
+          reset({
+            firstName: user.firstName ?? '',
+            lastName: user.lastName ?? '',
+            email: user.email ?? '',
+          });
         }
         setAvatarUri(uri);
       } finally {
@@ -54,40 +67,32 @@ export default function PersonalInformationScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reset]);
 
-  const onSave = useCallback(async () => {
-    const fn = firstName.trim();
-    const ln = lastName.trim();
-    const em = email.trim();
-    if (!fn || !ln) {
-      Alert.alert('Missing name', 'Please enter your first and last name.');
-      return;
-    }
-    if (!isValidEmail(em)) {
-      Alert.alert('Invalid email', 'Please enter a valid email address.');
-      return;
-    }
-    if (!baseUser) {
-      Alert.alert('Not signed in', 'Sign in again to save your profile.');
-      return;
-    }
-    setSaving(true);
-    try {
-      const updated: UserReadDto = {
-        ...baseUser,
-        firstName: fn,
-        lastName: ln,
-        email: em,
-      };
-      await setCurrentUser(updated);
-      await setProfileAvatarUri(avatarUri);
-      setBaseUser(updated);
-      router.back();
-    } finally {
-      setSaving(false);
-    }
-  }, [avatarUri, baseUser, email, firstName, lastName, router]);
+  const onSubmit = useCallback(
+    async (data: PersonalInformationFormValues) => {
+      if (!baseUser) {
+        Alert.alert('Not signed in', 'Sign in again to save your profile.');
+        return;
+      }
+      setSaving(true);
+      try {
+        const updated: UserReadDto = {
+          ...baseUser,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
+        };
+        await setCurrentUser(updated);
+        await setProfileAvatarUri(avatarUri);
+        setBaseUser(updated);
+        router.back();
+      } finally {
+        setSaving(false);
+      }
+    },
+    [avatarUri, baseUser, router]
+  );
 
   if (loading) {
     return (
@@ -110,7 +115,7 @@ export default function PersonalInformationScreen() {
           <MaterialIcons name="close" size={24} color={ForumColors.charcoal} />
         </Pressable>
         <Pressable
-          onPress={onSave}
+          onPress={() => void handleSubmit(onSubmit)()}
           disabled={saving}
           style={({ pressed }) => [styles.saveBtn, pressed && styles.saveBtnPressed, saving && styles.saveBtnDisabled]}
           accessibilityRole="button"
@@ -138,35 +143,65 @@ export default function PersonalInformationScreen() {
 
         <View style={styles.nameBlock}>
           <Text style={styles.groupLabel}>Your name</Text>
-          <Input
-            label=""
-            placeholder="Enter your first name here"
-            value={firstName}
-            onChangeText={setFirstName}
-            brandBorder
-            autoCapitalize="words"
-            autoCorrect
+          <Controller
+            control={control}
+            name="firstName"
+            render={({ field: { onChange, onBlur, value, ref } }) => (
+              <Input
+                ref={ref}
+                label=""
+                placeholder="Enter your first name here"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                error={errors.firstName?.message}
+                brandBorder
+                autoCapitalize="words"
+                autoCorrect
+                autoComplete="given-name"
+              />
+            )}
           />
-          <Input
-            label=""
-            placeholder="Last name"
-            value={lastName}
-            onChangeText={setLastName}
-            brandBorder
-            autoCapitalize="words"
-            autoCorrect
+          <Controller
+            control={control}
+            name="lastName"
+            render={({ field: { onChange, onBlur, value, ref } }) => (
+              <Input
+                ref={ref}
+                label=""
+                placeholder="Last name"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                error={errors.lastName?.message}
+                brandBorder
+                autoCapitalize="words"
+                autoCorrect
+                autoComplete="family-name"
+              />
+            )}
           />
         </View>
 
-        <Input
-          label="Email"
-          placeholder="you@email.com.au"
-          value={email}
-          onChangeText={setEmail}
-          brandBorder
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="email-address"
+        <Controller
+          control={control}
+          name="email"
+          render={({ field: { onChange, onBlur, value, ref } }) => (
+            <Input
+              ref={ref}
+              label="Email"
+              placeholder="you@email.com.au"
+              value={value}
+              onChangeText={onChange}
+              onBlur={onBlur}
+              error={errors.email?.message}
+              brandBorder
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              autoComplete="email"
+            />
+          )}
         />
       </ScrollView>
     </SafeAreaView>

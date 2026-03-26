@@ -7,6 +7,15 @@ export const signInSchema = z.object({
 
 export type SignInFormValues = z.infer<typeof signInSchema>;
 
+/** Settings — personal info (name + email), aligned with signup details rules. */
+export const personalInformationSchema = z.object({
+  firstName: z.string().trim().min(1, 'First name is required'),
+  lastName: z.string().trim().min(1, 'Last name is required'),
+  email: z.string().trim().min(1, 'Email is required').email('Invalid email address'),
+});
+
+export type PersonalInformationFormValues = z.infer<typeof personalInformationSchema>;
+
 export const signUpSchema = z
   .object({
     email: z.string().min(1, 'Email is required').email('Invalid email address'),
