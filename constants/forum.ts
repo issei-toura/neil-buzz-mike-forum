@@ -14,6 +14,8 @@ export const ForumColors = {
   error: '#C62828',
   /** Login error banner — red @ 20% (Figma red/red-200) */
   errorBanner: 'rgba(250, 100, 100, 0.2)',
+  /** Settings list row background (Figma --grey) */
+  settingsRow: '#EFEFEF',
 } as const;
 
 export const ForumLayout = {

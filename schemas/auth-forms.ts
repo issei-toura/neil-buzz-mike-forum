@@ -7,6 +7,15 @@ export const signInSchema = z.object({
 
 export type SignInFormValues = z.infer<typeof signInSchema>;
 
+/** Settings — personal info (name + email), aligned with signup details rules. */
+export const personalInformationSchema = z.object({
+  firstName: z.string().trim().min(1, 'First name is required'),
+  lastName: z.string().trim().min(1, 'Last name is required'),
+  email: z.string().trim().min(1, 'Email is required').email('Invalid email address'),
+});
+
+export type PersonalInformationFormValues = z.infer<typeof personalInformationSchema>;
+
 export const signUpSchema = z
   .object({
     email: z.string().min(1, 'Email is required').email('Invalid email address'),
@@ -28,6 +37,11 @@ export const signUpSchema = z
     state: z.string().min(1, 'State is required'),
     postalCode: z.string().min(1, 'Postal code is required'),
     country: z.string().min(1, 'Country is required'),
+    /** Filled when the user selects a Google Places suggestion (optional for API). */
+    googlePlaceId: z.string().optional(),
+    fullAddressLine: z.string().optional(),
+    addressLat: z.number().optional(),
+    addressLng: z.number().optional(),
     acceptedTerms: z.boolean(),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -41,10 +55,43 @@ export const signUpSchema = z
 
 export type SignUpFormValues = z.infer<typeof signUpSchema>;
 
+/** Same strength rules as signup `password` — used for settings "update password". */
+export const updatePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    newPassword: z
+      .string()
+      .min(8, 'Password must be at least 8 characters')
+      .max(16, 'Password must be at most 16 characters')
+      .regex(/\d/, 'Include at least one number')
+      .regex(/[^A-Za-z0-9\s]/, 'Include at least one symbol')
+      .regex(/[a-z]/, 'Include a lowercase letter')
+      .regex(/[A-Z]/, 'Include an uppercase letter'),
+    confirmNewPassword: z.string().min(1, 'Confirm your new password'),
+  })
+  .refine((data) => data.newPassword === data.confirmNewPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmNewPassword'],
+  })
+  .refine((data) => data.currentPassword !== data.newPassword, {
+    message: 'New password must be different from your current password',
+    path: ['newPassword'],
+  });
+
+export type UpdatePasswordFormValues = z.infer<typeof updatePasswordSchema>;
+
 /** Field names per signup wizard step (0-based) for RHF `trigger`. Step 3 is profile-only (no fields here). */
 export const signUpStepFields: (keyof SignUpFormValues)[][] = [
-  ['firstName', 'lastName', 'email'],
-  ['street', 'number', 'city', 'state', 'postalCode', 'country', 'telephone'],
+  ['firstName', 'lastName', 'email', 'telephone'],
+  [
+    'street',
+    'number',
+    'city',
+    'state',
+    'postalCode',
+    'country',
+    'googlePlaceId',
+  ],
   ['password', 'confirmPassword', 'acceptedTerms'],
 ];
 

@@ -1,10 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useState } from 'react';
-import { useForm, type Control, type FieldErrors } from 'react-hook-form';
+import { useState } from 'react';
+import {
+  useForm,
+  type Control,
+  type FieldErrors,
+  type UseFormClearErrors,
+  type UseFormGetValues,
+  type UseFormSetValue,
+} from 'react-hook-form';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -43,6 +49,16 @@ function toUserCreateDto(values: SignUpFormValues): UserCreateDto {
       state: values.state,
       postalCode: values.postalCode,
       country: values.country,
+      ...(values.fullAddressLine?.trim()
+        ? { fullAddress: values.fullAddressLine.trim() }
+        : {}),
+      ...(values.googlePlaceId?.trim() ? { googlePlaceId: values.googlePlaceId.trim() } : {}),
+      ...(values.addressLat !== undefined && !Number.isNaN(values.addressLat)
+        ? { lat: values.addressLat }
+        : {}),
+      ...(values.addressLng !== undefined && !Number.isNaN(values.addressLng)
+        ? { lng: values.addressLng }
+        : {}),
     },
     password: values.password,
     confirmPassword: values.confirmPassword,
@@ -55,24 +71,37 @@ function SignUpWizardStepContent({
   step,
   control,
   errors,
+  setValue,
+  getValues,
+  clearErrors,
   profileUri,
-  onPickImage,
+  onProfileUriChange,
 }: {
   step: SignUpStep;
   control: Control<SignUpFormValues>;
   errors: FieldErrors<SignUpFormValues>;
+  setValue: UseFormSetValue<SignUpFormValues>;
+  getValues: UseFormGetValues<SignUpFormValues>;
+  clearErrors: UseFormClearErrors<SignUpFormValues>;
   profileUri: string | null;
-  onPickImage: () => void;
+  onProfileUriChange: (uri: string) => void;
 }) {
   switch (step) {
     case 'DETAILS':
       return <SignUpDetailsStep control={control} errors={errors} />;
     case 'ADDRESS':
-      return <SignUpAddressStep control={control} errors={errors} />;
+      return (
+        <SignUpAddressStep
+          errors={errors}
+          setValue={setValue}
+          getValues={getValues}
+          clearErrors={clearErrors}
+        />
+      );
     case 'SECURITY':
       return <SignUpSecurityStep control={control} errors={errors} />;
     case 'PROFILE':
-      return <SignUpProfileStep profileUri={profileUri} onPickImage={onPickImage} />;
+      return <SignUpProfileStep profileUri={profileUri} onProfileUriChange={onProfileUriChange} />;
     default:
       return null;
   }
@@ -89,6 +118,10 @@ export default function SignUpScreen() {
     control,
     handleSubmit,
     trigger,
+    setValue,
+    getValues,
+    setError,
+    clearErrors,
     formState: { errors },
   } = useForm<SignUpFormValues>({
     resolver: zodResolver(signUpSchema),
@@ -105,6 +138,10 @@ export default function SignUpScreen() {
       state: '',
       postalCode: '',
       country: '',
+      googlePlaceId: '',
+      fullAddressLine: '',
+      addressLat: undefined,
+      addressLng: undefined,
       acceptedTerms: false,
     },
   });
@@ -121,23 +158,20 @@ export default function SignUpScreen() {
     },
   });
 
-  const pickProfileImage = useCallback(async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.85,
-    });
-    if (!result.canceled && result.assets[0]?.uri) {
-      setProfileUri(result.assets[0].uri);
-    }
-  }, []);
-
   const goNext = async () => {
     const fields = signUpStepFields[stepIndex];
     if (!fields) return;
+    if (step === 'ADDRESS') {
+      const pid = getValues('googlePlaceId');
+      if (!pid?.trim()) {
+        setError('googlePlaceId', {
+          type: 'manual',
+          message: 'Select your address from the suggestions below.',
+        });
+        return;
+      }
+      clearErrors('googlePlaceId');
+    }
     const ok = await trigger(fields, { shouldFocus: true });
     if (ok && stepIndex < SIGN_UP_STEPS.length - 1) {
       setStep(SIGN_UP_STEPS[stepIndex + 1]);
@@ -193,8 +227,11 @@ export default function SignUpScreen() {
               step={step}
               control={control}
               errors={errors}
+              setValue={setValue}
+              getValues={getValues}
+              clearErrors={clearErrors}
               profileUri={profileUri}
-              onPickImage={pickProfileImage}
+              onProfileUriChange={setProfileUri}
             />
 
             {registerMutation.isError ? (
@@ -283,7 +320,7 @@ const styles = StyleSheet.create({
     backgroundColor: ForumColors.border,
   },
   head: {
-    marginBottom: 24,
+    marginBottom: 32,
     gap: 16,
   },
   title: {

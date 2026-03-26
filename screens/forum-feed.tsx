@@ -187,6 +187,7 @@ export default function ForumFeedScreen() {
             <MaterialIcons name="add" size={32} color={ForumColors.purple} />
           </Pressable>
           <Pressable
+            onPress={() => router.push('/settings')}
             style={styles.iconHit}
             accessibilityRole="button"
             accessibilityLabel="Account">

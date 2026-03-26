@@ -9,7 +9,8 @@ export const SIGNUP_STEP_META: Record<SignUpStep, { title: string; subtitle: str
   },
   ADDRESS: {
     title: 'Where are you Located?',
-    subtitle: 'Add your mailing address as it will be stored on your account.',
+    subtitle:
+      'Add your address. Select your address from the suggested address below.',
   },
   SECURITY: {
     title: "Let's Secure your Account",
