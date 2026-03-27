@@ -1,84 +1,23 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ForumFeedHeader } from '@/components/forum-feed/forum-feed-header';
+import { ForumFeedPostList } from '@/components/forum-feed/forum-feed-post-list';
+import { adjustPostLikesEverywhere } from '@/components/forum-feed/forum-post-cache';
+import { PostCard } from '@/components/forum-feed/post-card';
 import { ForumColors, ForumLayout } from '@/constants/forum';
 import { queryKeys } from '@/lib/query-keys';
 import { likePost, searchPosts, unlikePost } from '@/services/posts';
 import { listTags } from '@/services/tags';
-import type { UserReadDto } from '@/types/auth';
-import type { PaginationPostDto, ReadPostDto } from '@/types/posts';
+import type { ReadPostDto } from '@/types/posts';
 import { getErrorMessage } from '@/utils/error-message';
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
-const CHIP_GAP = 8;
-const META_DOT = '·';
-
-function formatFeedDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  return `${day}-${month}-${year}`;
-}
-
-function formatAuthor(user: UserReadDto): string {
-  return `${user.firstName} ${user.lastName}`.trim() || user.email;
-}
-
-function snippetBody(content: string, maxLen = 200): string {
-  const t = content.replace(/\s+/g, ' ').trim();
-  if (t.length <= maxLen) return t;
-  return `${t.slice(0, maxLen).trim()}…`;
-}
-
-function patchPostInForumCaches(
-  queryClient: QueryClient,
-  postId: number,
-  patch: (post: ReadPostDto) => ReadPostDto
-) {
-  queryClient.setQueriesData<InfiniteData<PaginationPostDto>>(
-    { queryKey: queryKeys.forumPosts.all },
-    (old) => {
-      if (!old?.pages) return old;
-      return {
-        ...old,
-        pages: old.pages.map((page) => ({
-          ...page,
-          data: page.data.map((p) => (p.id === postId ? patch(p) : p)),
-        })),
-      };
-    }
-  );
-}
-
-function adjustPostLikesEverywhere(queryClient: QueryClient, postId: number, delta: number) {
-  patchPostInForumCaches(queryClient, postId, (p) => ({
-    ...p,
-    likes: Math.max(0, p.likes + delta),
-  }));
-  queryClient.setQueryData<ReadPostDto>(queryKeys.post(postId), (prev) => {
-    if (!prev || prev.id !== postId) return prev;
-    return { ...prev, likes: Math.max(0, prev.likes + delta) };
-  });
-}
+const EMPTY_TAG_NAMES: string[] = [];
 
 export default function ForumFeedScreen() {
   const router = useRouter();
@@ -174,64 +113,29 @@ export default function ForumFeedScreen() {
     ? toggleLikeMutation.variables?.postId
     : undefined;
 
-  const header = (
-    <View style={styles.headerBlock}>
-      <View style={styles.topBar}>
-        <Text style={styles.forumTitle}>Forum</Text>
-        <View style={styles.topBarActions}>
-          <Pressable
-            onPress={() => router.push('/create-post')}
-            style={styles.iconHit}
-            accessibilityRole="button"
-            accessibilityLabel="Create new post">
-            <MaterialIcons name="add" size={32} color={ForumColors.purple} />
-          </Pressable>
-          <Pressable
-            onPress={() => router.push('/settings')}
-            style={styles.iconHit}
-            accessibilityRole="button"
-            accessibilityLabel="Account">
-            <MaterialIcons name="account-circle" size={32} color={ForumColors.purple} />
-          </Pressable>
-        </View>
-      </View>
+  const onPressCreate = useCallback(() => {
+    router.push('/create-post');
+  }, [router]);
 
-      <View style={styles.searchBar}>
-        <MaterialIcons name="search" size={24} color={ForumColors.charcoal} style={styles.searchIcon} />
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search"
-          placeholderTextColor="rgba(56, 57, 57, 0.4)"
-          style={styles.searchInput}
-          accessibilityLabel="Search posts"
-        />
-      </View>
+  const onPressSettings = useCallback(() => {
+    router.push('/settings');
+  }, [router]);
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipsRow}
-        style={styles.chipsScroll}>
-        <Pressable
-          onPress={() => setSelectedTag(null)}
-          style={[styles.chip, selectedTag === null && styles.chipActive]}
-          accessibilityRole="button"
-          accessibilityState={{ selected: selectedTag === null }}>
-          <Text style={[styles.chipLabel, selectedTag === null && styles.chipLabelActive]}>All</Text>
-        </Pressable>
-        {(tagsQuery.data ?? []).map((name) => (
-          <Pressable
-            key={name}
-            onPress={() => setSelectedTag(name)}
-            style={[styles.chip, selectedTag === name && styles.chipActive]}
-            accessibilityRole="button"
-            accessibilityState={{ selected: selectedTag === name }}>
-            <Text style={[styles.chipLabel, selectedTag === name && styles.chipLabelActive]}>{name}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-    </View>
+  const tagNames = tagsQuery.data;
+
+  const listHeader = useMemo(
+    () => (
+      <ForumFeedHeader
+        search={search}
+        onSearchChange={setSearch}
+        selectedTag={selectedTag}
+        onSelectTag={setSelectedTag}
+        tagNames={tagNames ?? EMPTY_TAG_NAMES}
+        onPressCreate={onPressCreate}
+        onPressSettings={onPressSettings}
+      />
+    ),
+    [search, selectedTag, tagNames, onPressCreate, onPressSettings]
   );
 
   const renderPost = useCallback(
@@ -275,106 +179,17 @@ export default function ForumFeedScreen() {
         </View>
       ) : null}
 
-      <FlatList
+      <ForumFeedPostList
         data={displayedPosts}
-        keyExtractor={(item) => String(item.id)}
+        listHeader={listHeader}
         renderItem={renderPost}
-        ListHeaderComponent={header}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={postsQuery.isRefetching && !postsQuery.isFetchingNextPage}
-            onRefresh={onRefresh}
-            tintColor={ForumColors.purple}
-          />
-        }
+        refreshing={postsQuery.isRefetching && !postsQuery.isFetchingNextPage}
+        onRefresh={onRefresh}
         onEndReached={loadMore}
-        onEndReachedThreshold={0.35}
-        ListFooterComponent={
-          postsQuery.isFetchingNextPage ? (
-            <ActivityIndicator style={styles.footerSpinner} color={ForumColors.purple} />
-          ) : null
-        }
-        ListEmptyComponent={
-          !postsQuery.isPending ? (
-            <Text style={styles.empty}>No posts match your filters.</Text>
-          ) : null
-        }
+        showFooterSpinner={postsQuery.isFetchingNextPage}
+        showEmptyMessage={!postsQuery.isPending}
       />
     </SafeAreaView>
-  );
-}
-
-function PostCard({
-  post,
-  categoryLabel,
-  isLiked,
-  likeBusy,
-  onToggleLike,
-  onOpenPost,
-}: {
-  post: ReadPostDto;
-  categoryLabel: string | null;
-  isLiked: boolean;
-  likeBusy: boolean;
-  onToggleLike: () => void;
-  onOpenPost: () => void;
-}) {
-  return (
-    <View style={styles.postCard}>
-      <View style={styles.postMetaRow}>
-        <View style={styles.postMetaLeft}>
-          <Text style={styles.metaText}>{formatAuthor(post.user)}</Text>
-          <Text style={styles.metaDot}>{META_DOT}</Text>
-          <Text style={styles.metaText}>{formatFeedDate(post.createdAt)}</Text>
-        </View>
-      </View>
-
-      <Pressable
-        onPress={onOpenPost}
-        accessibilityRole="button"
-        accessibilityLabel={`Post: ${post.title}`}>
-        <Text style={styles.postTitle}>{post.title}</Text>
-
-        {categoryLabel ? (
-          <View style={styles.categoryPill}>
-            <Text style={styles.categoryPillText}>{categoryLabel}</Text>
-          </View>
-        ) : null}
-
-        <Text style={styles.postBody}>{snippetBody(post.content)}</Text>
-      </Pressable>
-
-      <View style={styles.engagementRow}>
-        <Pressable
-          onPress={onToggleLike}
-          disabled={likeBusy}
-          style={styles.engagementHit}
-          accessibilityRole="button"
-          accessibilityLabel={isLiked ? 'Unlike post' : 'Like post'}
-          accessibilityState={{ selected: isLiked, disabled: likeBusy }}>
-          {likeBusy ? (
-            <ActivityIndicator size="small" color={ForumColors.purple} />
-          ) : (
-            <MaterialIcons
-              name={isLiked ? 'favorite' : 'favorite-border'}
-              size={24}
-              color={isLiked ? ForumColors.purple : ForumColors.charcoal}
-            />
-          )}
-          <Text style={styles.engagementCount}>{post.likes}</Text>
-        </Pressable>
-        <Pressable
-          onPress={onOpenPost}
-          style={styles.engagementHit}
-          accessibilityRole="button"
-          accessibilityLabel={`Open comments, ${post.comments} comments`}>
-          <MaterialIcons name="chat-bubble-outline" size={24} color={ForumColors.charcoal} />
-          <Text style={styles.engagementCount}>{post.comments}</Text>
-        </Pressable>
-      </View>
-    </View>
   );
 }
 
@@ -406,156 +221,5 @@ const styles = StyleSheet.create({
     color: ForumColors.purple,
     fontSize: 14,
     fontWeight: '600',
-  },
-  listContent: {
-    paddingBottom: 24,
-  },
-  headerBlock: {
-    paddingHorizontal: ForumLayout.screenPadding,
-    paddingBottom: 12,
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  forumTitle: {
-    fontSize: 25,
-    fontWeight: '700',
-    color: ForumColors.charcoal,
-  },
-  topBarActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: ForumLayout.gapButtons,
-  },
-  iconHit: {
-    padding: 4,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(56, 57, 57, 0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginBottom: 16,
-    maxWidth: ForumLayout.maxContentWidth + 48,
-    alignSelf: 'stretch',
-  },
-  searchIcon: {
-    opacity: 0.4,
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 18,
-    color: ForumColors.charcoal,
-    padding: 0,
-  },
-  chipsScroll: {
-    marginHorizontal: -ForumLayout.screenPadding,
-    marginBottom: 8,
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: CHIP_GAP,
-    paddingHorizontal: ForumLayout.screenPadding,
-    paddingBottom: 4,
-  },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    backgroundColor: 'rgba(56, 57, 57, 0.1)',
-  },
-  chipActive: {
-    backgroundColor: ForumColors.purple,
-  },
-  chipLabel: {
-    fontSize: 14,
-    color: ForumColors.charcoal,
-  },
-  chipLabelActive: {
-    color: ForumColors.white,
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(56, 57, 57, 0.15)',
-    marginHorizontal: ForumLayout.screenPadding,
-  },
-  postCard: {
-    paddingHorizontal: ForumLayout.screenPadding,
-    paddingVertical: 20,
-    gap: 8,
-  },
-  postMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  postMetaLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  metaText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: ForumColors.charcoal,
-    opacity: 0.8,
-  },
-  metaDot: {
-    fontSize: 14,
-    color: ForumColors.charcoal,
-    opacity: 0.8,
-  },
-  postTitle: {
-    fontSize: 25,
-    fontWeight: '700',
-    color: ForumColors.charcoal,
-  },
-  categoryPill: {
-    alignSelf: 'flex-start',
-    backgroundColor: ForumColors.purple,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-  },
-  categoryPillText: {
-    fontSize: 14,
-    color: ForumColors.white,
-  },
-  postBody: {
-    fontSize: 14,
-    color: ForumColors.charcoal,
-    lineHeight: 20,
-  },
-  engagementRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 20,
-    marginTop: 8,
-    opacity: 0.9,
-  },
-  engagementHit: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    minWidth: 56,
-  },
-  engagementCount: {
-    fontSize: 14,
-    color: ForumColors.charcoal,
-  },
-  footerSpinner: {
-    paddingVertical: 16,
-  },
-  empty: {
-    textAlign: 'center',
-    color: ForumColors.muted,
-    paddingVertical: 32,
-    paddingHorizontal: ForumLayout.screenPadding,
   },
 });

@@ -1,15 +1,22 @@
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import SplashIllustration from '@/assets/images/splash.svg';
 import { ForumColors } from '@/constants/forum';
+import { useEffect } from 'react';
 
 /**
  * Splash — Figma: solid purple + centered white illustration (node 101:2).
  */
 export default function SplashScreen() {
+
+  useEffect(() => {
+    setTimeout(() => {
+      router.push('/welcome');
+    }, 2000);
+  }, []);
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
@@ -17,9 +24,6 @@ export default function SplashScreen() {
         <View style={styles.center}>
           <SplashIllustration width={120} height={179} />
         </View>
-        <Pressable style={styles.footer} onPress={() => router.push('/welcome')}>
-          <Text style={styles.footerLabel}>Continue</Text>
-        </Pressable>
       </SafeAreaView>
     </View>
   );
